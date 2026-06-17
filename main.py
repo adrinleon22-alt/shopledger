@@ -1,5 +1,5 @@
 import sqlite3
-from fastapi import FastAPI
+from fastapi import FastAPI, Query
 from pydantic import BaseModel, Field
 from datetime import datetime
 
@@ -109,4 +109,31 @@ def create_expense(expense: ExpenseCreate):
         "amount": expense.amount,
         "supplier": expense.supplier,
         "created_at": created_at,
+    }
+
+
+@app.get("/summary")
+def get_summary(month: str = Query(..., pattern=r"^\d{4}-\d{2}$")):
+    pattern = f"{month}%"
+
+    with sqlite3.connect(DATABASE) as conn:
+        sales_result = conn.execute(
+            "SELECT SUM(total) FROM sales WHERE created_at LIKE ?",
+            (pattern,)
+        ).fetchone()
+
+        expenses_result = conn.execute(
+            "SELECT SUM(amount) FROM expenses WHERE created_at LIKE ?",
+            (pattern,)
+        ).fetchone()
+
+    total_sales = sales_result[0] or 0
+    total_expenses = expenses_result[0] or 0
+    profit = total_sales - total_expenses
+
+    return {
+        "month": month,
+        "total_sales": total_sales,
+        "total_expenses": total_expenses,
+        "profit": profit,
     }

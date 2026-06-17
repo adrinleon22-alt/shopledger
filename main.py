@@ -1,5 +1,5 @@
 import sqlite3
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, Query, HTTPException
 from pydantic import BaseModel, Field
 from datetime import datetime
 
@@ -97,7 +97,7 @@ def create_expense(expense: ExpenseCreate):
 
     with sqlite3.connect(DATABASE) as conn:
         cursor = conn.execute(
-            "INSERT INTO expenses (category, amount, supplier, created_at) VALUES (?, ?, ?, ?)",
+            "INSERT INTO expenses (category, amount, supplier, created_at) VALUES (?, ?, ?)",
             (expense.category, expense.amount, expense.supplier, created_at)
         )
         conn.commit()
@@ -137,3 +137,69 @@ def get_summary(month: str = Query(..., pattern=r"^\d{4}-\d{2}$")):
         "total_expenses": total_expenses,
         "profit": profit,
     }
+
+@app.delete("/sales/{sale_id}", status_code=204)
+def delete_sale(sale_id: int):
+    with sqlite3.connect(DATABASE) as conn:
+        cursor = conn.execute(
+            "DELETE FROM sales WHERE id = ?",
+            (sale_id,)
+        )
+        conn.commit()
+
+    if cursor.rowcount == 0:
+        raise HTTPException(status_code=404, detail="Sale not found")
+
+@app.delete("/expenses/{expense_id}", status_code=204)
+def delete_expense(expense_id: int):
+    with sqlite3.connect(DATABASE) as conn:
+        cursor = conn.execute(
+            "DELETE FROM expenses WHERE id = ?",
+            (expense_id,)
+        )
+        conn.commit()
+
+    if cursor.rowcount == 0:
+        raise HTTPException(status_code=404, detail="Expense not found")
+
+@app.put("/sales/{sale_id}")
+def update_sale(sale_id: int, sale: SaleCreate):
+    total = sale.quantity * sale.price
+
+    with sqlite3.connect(DATABASE) as conn:
+        cursor = conn.execute(
+            "UPDATE sales SET item = ?, quantity = ?, price = ?, total = ? WHERE id = ?",
+            (sale.item, sale.quantity, sale.price, total, sale_id)
+        )
+        conn.commit()
+
+    if cursor.rowcount == 0:
+        raise HTTPException(status_code=404, detail="Sale not found")
+
+    return {
+        "id": sale_id,
+        "item": sale.item,
+        "quantity": sale.quantity,
+        "price": sale.price,
+        "total": total,
+    }        
+
+@app.put("/expenses/{expense_id}")
+def update_expense(expense_id: int, expense: ExpenseCreate):
+
+    with sqlite3.connect(DATABASE) as conn:
+        cursor = conn.execute(
+            "UPDATE expenses SET category = ?, amount = ?, supplier = ? WHERE id = ?",
+            (expense.category, expense.amount, expense.supplier, expense_id)
+        )
+        conn.commit()
+
+    if cursor.rowcount == 0:
+        raise HTTPException(status_code=404, detail="Expense not found")
+
+    return {
+        "id": expense_id,
+        "category": expense.category,
+        "amount": expense.amount,
+        "supplier": expense.supplier,
+    }   

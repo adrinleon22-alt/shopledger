@@ -61,6 +61,7 @@ class SaleCreate(BaseModel):
     item: str = Field(min_length=1, max_length=100)
     quantity: int = Field(gt=0)
     price: float = Field(gt=0)
+    customer_id: int | None = None
 
 
 class ExpenseCreate(BaseModel):
@@ -93,8 +94,8 @@ def create_sale(sale: SaleCreate):
 
     with sqlite3.connect(DATABASE) as conn:
         cursor = conn.execute(
-            "INSERT INTO sales (item, quantity, price, total, created_at) VALUES (?, ?, ?, ?, ?)",
-            (sale.item, sale.quantity, sale.price, total, created_at)
+            "INSERT INTO sales (item, quantity, price, total,customer_id, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+            (sale.item, sale.quantity, sale.price, total, sale.customer_id, created_at)
         )
         conn.commit()
         new_id = cursor.lastrowid
@@ -105,6 +106,7 @@ def create_sale(sale: SaleCreate):
         "quantity": sale.quantity,
         "price": sale.price,
         "total": total,
+        "customer_id": sale.customer_id,
         "created_at": created_at,
     }
 
@@ -304,4 +306,58 @@ def create_payment(payment: PaymentCreate):
         "sale_id": payment.sale_id,
         "amount": payment.amount,
         "paid_at": paid_at,
+    }
+
+@app.get("/customers/{customer_id}/balance")
+def get_customer_balance(customer_id: int):
+    with sqlite3.connect(DATABASE) as conn:
+        conn.row_factory = sqlite3.Row
+        
+        customer = conn.execute(
+            "SELECT id, name, phone FROM customers WHERE id = ?",
+            (customer_id,)
+        ).fetchone()
+        
+        if customer is None:
+            raise HTTPException(status_code=404, detail="Customer not found")
+        
+        # Query 2 — get sales with payment sums (the JOIN)
+        sales_rows = conn.execute(
+            """
+            SELECT 
+                sales.id,
+                sales.item,
+                sales.total,
+                sales.created_at,
+                COALESCE(SUM(payments.amount), 0) AS amount_paid
+            FROM sales
+            LEFT JOIN payments ON payments.sale_id = sales.id
+            WHERE sales.customer_id = ?
+            GROUP BY sales.id
+            """,
+            (customer_id,)
+        ).fetchall()
+    
+    sales = []
+    outstanding_balance = 0
+    for row in sales_rows:
+        pending = row["total"] - row["amount_paid"]
+        outstanding_balance += pending
+        sales.append({
+            "sale_id": row["id"],
+            "item": row["item"],
+            "total": row["total"],
+            "amount_paid": row["amount_paid"],
+            "amount_pending": pending,
+            "created_at": row["created_at"],
+        })
+    
+    return {
+        "customer": {
+            "id": customer["id"],
+            "name": customer["name"],
+            "phone": customer["phone"],
+        },
+        "outstanding_balance": outstanding_balance,
+        "sales": sales,
     }

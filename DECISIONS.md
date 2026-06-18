@@ -64,3 +64,12 @@
 **Reasoning:** These rules depend on data across multiple rows and tables (sale total, sum of prior payments) — `CHECK` constraints can only inspect the row being inserted. Business rules also change over time, and updating a Python `if` statement is cheaper than running a schema migration. Finally, raising `HTTPException(400, "Payment exceeds remaining debt. Remaining: 1230")` gives the client a clear, actionable message; a `CHECK` failure returns an opaque database error.
 
 **Tradeoff:** The rule is only enforced for requests that go through the API. Anyone with direct database access (a developer running raw SQL, a future admin tool, a misconfigured ORM) can bypass it. For a single-tenant app where the API is the only entry point, this is acceptable; in larger systems, critical invariants are often duplicated in both layers as defence in depth.
+---
+
+## ADR-008: LEFT JOIN over INNER JOIN for customer balance query
+
+**Decision:** The `GET /customers/{id}/balance` endpoint uses `LEFT JOIN` between `sales` and `payments` rather than `INNER JOIN`.
+
+**Reasoning:** The balance endpoint must show every sale belonging to the customer, including sales where no payment has been made yet — those are the pure udhaar cases that represent the largest portion of unpaid debt. An `INNER JOIN` would silently drop any sale with zero matching payment rows, making the outstanding balance incorrect. `LEFT JOIN` preserves all sales, and `COALESCE(SUM(payments.amount), 0)` handles the NULL that appears when a sale has no payments.
+
+**Tradeoff:** `LEFT JOIN` is slightly slower than `INNER JOIN` on large datasets because the database can't drop unmatched rows early. At this scale the difference is negligible; in production with millions of rows, this query would likely need an index on `payments.sale_id`.

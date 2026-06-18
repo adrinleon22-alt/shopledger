@@ -10,25 +10,47 @@ DATABASE = "shopledger.db"
 
 def init_db():
     with sqlite3.connect(DATABASE) as conn:
+        conn.execute("PRAGMA foreign_keys = ON")
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS customers (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                name        TEXT    NOT NULL,
+                phone       TEXT,
+                created_at  TEXT    NOT NULL
+            )
+        """)
         conn.execute("""
             CREATE TABLE IF NOT EXISTS sales (
-                id         INTEGER PRIMARY KEY AUTOINCREMENT,
-                item       TEXT    NOT NULL,
-                quantity   INTEGER NOT NULL,
-                price      REAL    NOT NULL,
-                total      REAL    NOT NULL,
-                created_at TEXT    NOT NULL
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                item        TEXT    NOT NULL,
+                quantity    INTEGER NOT NULL,
+                price       REAL    NOT NULL,
+                total       REAL    NOT NULL,
+                customer_id INTEGER,
+                created_at  TEXT    NOT NULL,
+                FOREIGN KEY (customer_id) REFERENCES customers(id)
             )
         """)
         conn.execute("""
             CREATE TABLE IF NOT EXISTS expenses (
-                id         INTEGER PRIMARY KEY AUTOINCREMENT,
-                category   TEXT    NOT NULL,
-                amount     REAL    NOT NULL,
-                supplier   TEXT,
-                created_at TEXT    NOT NULL
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                category    TEXT    NOT NULL,
+                amount      REAL    NOT NULL,
+                supplier    TEXT,
+                created_at  TEXT    NOT NULL
             )
         """)
+        
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS payments (
+                id       INTEGER PRIMARY KEY AUTOINCREMENT,
+                sale_id  INTEGER NOT NULL,
+                amount   REAL    NOT NULL,
+                paid_at  TEXT    NOT NULL,
+                FOREIGN KEY (sale_id) REFERENCES sales(id) ON DELETE CASCADE
+            )
+        """)
+        
         conn.commit()
 
 
@@ -45,6 +67,10 @@ class ExpenseCreate(BaseModel):
     category: str = Field(min_length=1, max_length=100)
     amount: float = Field(gt=0)
     supplier: str | None = None
+
+class CustomerCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+    phone: str | None = None
 
 
 @app.get("/")
@@ -97,7 +123,7 @@ def create_expense(expense: ExpenseCreate):
 
     with sqlite3.connect(DATABASE) as conn:
         cursor = conn.execute(
-            "INSERT INTO expenses (category, amount, supplier, created_at) VALUES (?, ?, ?)",
+            "INSERT INTO expenses (category, amount, supplier, created_at) VALUES (?, ?, ?, ?)",
             (expense.category, expense.amount, expense.supplier, created_at)
         )
         conn.commit()
@@ -202,4 +228,80 @@ def update_expense(expense_id: int, expense: ExpenseCreate):
         "category": expense.category,
         "amount": expense.amount,
         "supplier": expense.supplier,
-    }   
+    } 
+
+@app.post("/customers", status_code=201)
+def create_customer(customer: CustomerCreate):
+    created_at = datetime.utcnow().isoformat()
+
+    with sqlite3.connect(DATABASE) as conn:
+        cursor = conn.execute(
+            "INSERT INTO customers (name, phone, created_at) VALUES (?, ?, ?)",
+            (customer.name,customer.phone, created_at)
+        )
+        conn.commit()
+        new_id = cursor.lastrowid
+
+    return {
+        "id": new_id,
+        "name": customer.name,
+        "phone": customer.phone,
+        "created_at": created_at,
+    }
+
+
+@app.get("/customers")
+def get_customers():
+    with sqlite3.connect(DATABASE) as conn:
+        conn.row_factory = sqlite3.Row
+        customers = conn.execute("SELECT * FROM customers").fetchall()
+    return {"customers": [dict(customer) for customer in customers]}
+
+class PaymentCreate(BaseModel):
+    sale_id: int
+    amount: float = Field(gt=0)
+
+
+@app.post("/payments", status_code=201)
+def create_payment(payment: PaymentCreate):
+    paid_at = datetime.utcnow().isoformat()
+
+    with sqlite3.connect(DATABASE) as conn:
+        conn.execute("PRAGMA foreign_keys = ON")
+        
+        sale = conn.execute(
+            "SELECT total FROM sales WHERE id = ?",
+            (payment.sale_id,)
+        ).fetchone()
+        
+        if sale is None:
+            raise HTTPException(status_code=404, detail="Sale not found")
+        
+        sale_total = sale[0]
+        
+        result = conn.execute(
+            "SELECT SUM(amount) FROM payments WHERE sale_id = ?",
+            (payment.sale_id,)
+        ).fetchone()
+        existing_paid = result[0] or 0
+        
+        if existing_paid + payment.amount > sale_total:
+            remaining = sale_total - existing_paid
+            raise HTTPException(
+                status_code=400,
+                detail=f"Payment exceeds remaining debt. Remaining: {remaining}"
+            )
+        
+        cursor = conn.execute(
+            "INSERT INTO payments (sale_id, amount, paid_at) VALUES (?, ?, ?)",
+            (payment.sale_id, payment.amount, paid_at)
+        )
+        conn.commit()
+        new_id = cursor.lastrowid
+
+    return {
+        "id": new_id,
+        "sale_id": payment.sale_id,
+        "amount": payment.amount,
+        "paid_at": paid_at,
+    }

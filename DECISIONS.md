@@ -23,6 +23,7 @@
 **Decision:** The `supplier` column in the `expenses` table is nullable (no `NOT NULL` constraint).
 
 **Reasoning:** Not every expense has a supplier. Categories like rent, electricity, or staff wages are paid to fixed recipients that don't need to be tracked per transaction. Supplier matters mainly for restocking expenses where the shop pays different vendors (e.g. Bosch India, Tata Steel). Forcing every expense to have a supplier would require fake values like "N/A" for non-supplier expenses — bad data hygiene.
+
 ---
 
 ## ADR-004: Validation at the API boundary; profit calculated in Python
@@ -44,3 +45,22 @@
 **Reasoning:** PATCH requires dynamic SQL construction based on which fields the client sent, plus extra handling for edge cases like empty bodies or unknown fields. PUT keeps the SQL static and the validation logic simple — every request must contain the full object, validated by the existing Pydantic model. The frontend solves the UX concern by pre-filling the edit form with current values, so users don't manually re-enter unchanged fields.
 
 **Tradeoff:** True partial updates are not supported. Every update sends the complete object over the network, even when only one field changed. For this app's scale and traffic this is negligible; if needed later, a PATCH endpoint can be added without breaking PUT.
+---
+
+## ADR-006: Separate payments table instead of `amount_paid` column on sales
+
+**Decision:** Partial payments are tracked in a dedicated `payments` table linked to sales via a foreign key, rather than as an `amount_paid` column on the sales table.
+
+**Reasoning:** A single column can only store the total amount paid — not when payments happened, how many payments were made, or in what order. For a bookkeeping app where customers pay debts in instalments (common in udhaar), losing this history makes the app useless as an audit trail. With a separate table, each payment is its own row, fully traceable. The total amount paid is then a *derived value* — computed by summing `payments.amount` for a given `sale_id` — rather than stored redundantly.
+
+**Tradeoff:** More complex queries (joins / subqueries needed to compute remaining debt), one extra table to maintain, and `ON DELETE CASCADE` required to keep payments consistent when sales are deleted.
+
+---
+
+## ADR-007: Business rules enforced at the API layer, not in the database
+
+**Decision:** Business rules like "payment must not exceed remaining debt" are enforced in the FastAPI endpoint logic, not via SQL `CHECK` constraints or triggers.
+
+**Reasoning:** These rules depend on data across multiple rows and tables (sale total, sum of prior payments) — `CHECK` constraints can only inspect the row being inserted. Business rules also change over time, and updating a Python `if` statement is cheaper than running a schema migration. Finally, raising `HTTPException(400, "Payment exceeds remaining debt. Remaining: 1230")` gives the client a clear, actionable message; a `CHECK` failure returns an opaque database error.
+
+**Tradeoff:** The rule is only enforced for requests that go through the API. Anyone with direct database access (a developer running raw SQL, a future admin tool, a misconfigured ORM) can bypass it. For a single-tenant app where the API is the only entry point, this is acceptable; in larger systems, critical invariants are often duplicated in both layers as defence in depth.

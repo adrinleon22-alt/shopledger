@@ -2,10 +2,19 @@ import sqlite3
 from fastapi import FastAPI, Query, HTTPException
 from pydantic import BaseModel, Field
 from datetime import datetime
+from io import BytesIO
+from reportlab.pdfgen import canvas
+from reportlab.lib.pagesizes import A4
+from fastapi.responses import Response
 
 app = FastAPI()
 
 DATABASE = "shopledger.db"
+
+SHOP_NAME = "ALVA'S HARDWARE"
+SHOP_ADDRESS = "Main Road, Moodubelle - 576120"
+SHOP_PHONE = "+91 9483231871"
+SHOP_GSTIN = "29ABCDE1234F1Z5"
 
 
 def init_db():
@@ -361,3 +370,118 @@ def get_customer_balance(customer_id: int):
         "outstanding_balance": outstanding_balance,
         "sales": sales,
     }
+
+@app.get("/sales/{sale_id}/receipt")
+def get_sale_receipt(sale_id: int):
+    with sqlite3.connect(DATABASE) as conn:
+        conn.row_factory = sqlite3.Row
+
+        sale = conn.execute(
+            "SELECT * FROM sales WHERE id = ?",
+            (sale_id,)
+        ).fetchone()
+
+        if sale is None:
+            raise HTTPException(status_code=404, detail="Sale not found")
+
+        customer = None
+        if sale["customer_id"] is not None:
+            customer = conn.execute(
+                "SELECT name, phone FROM customers WHERE id = ?",
+                (sale["customer_id"],)
+            ).fetchone()
+
+        paid_result = conn.execute(
+            "SELECT COALESCE(SUM(amount), 0) FROM payments WHERE sale_id = ?",
+            (sale_id,)
+        ).fetchone()
+        amount_paid = paid_result[0]
+
+    amount_pending = sale["total"] - amount_paid
+    if amount_pending == 0:
+        status = "PAID"
+    elif amount_paid == 0:
+        status = "UNPAID (UDHAAR)"
+    else:
+        status = f"PARTIAL ({amount_paid}/{sale['total']})"
+
+    buffer = BytesIO()
+    pdf = canvas.Canvas(buffer, pagesize=A4)
+    width, height = A4
+
+    y = height - 50
+    pdf.setFont("Helvetica-Bold", 16)
+    pdf.drawString(50, y, SHOP_NAME)
+
+    pdf.setFont("Helvetica", 10)
+    y -= 20
+    pdf.drawString(50, y, SHOP_ADDRESS)
+    y -= 15
+    pdf.drawString(50, y, f"Phone: {SHOP_PHONE}")
+    y -= 15
+    pdf.drawString(50, y, f"GSTIN: {SHOP_GSTIN}")
+
+    y -= 30
+    pdf.line(50, y, width - 50, y)
+
+    y -= 25
+    pdf.setFont("Helvetica-Bold", 12)
+    pdf.drawString(50, y, f"Receipt #{sale['id']}")
+    pdf.setFont("Helvetica", 10)
+    pdf.drawString(width - 200, y, f"Date: {sale['created_at'][:10]}")
+
+    if customer is not None:
+        y -= 25
+        pdf.setFont("Helvetica-Bold", 11)
+        pdf.drawString(50, y, "Customer:")
+        pdf.setFont("Helvetica", 10)
+        y -= 15
+        pdf.drawString(50, y, f"Name: {customer['name']}")
+        if customer["phone"]:
+            y -= 15
+            pdf.drawString(50, y, f"Phone: {customer['phone']}")
+
+    y -= 30
+    pdf.line(50, y, width - 50, y)
+
+    y -= 25
+    pdf.setFont("Helvetica-Bold", 11)
+    pdf.drawString(50, y, "Item")
+    pdf.drawString(280, y, "Qty")
+    pdf.drawString(360, y, "Price")
+    pdf.drawString(460, y, "Total")
+
+    y -= 20
+    pdf.setFont("Helvetica", 10)
+    pdf.drawString(50, y, sale["item"])
+    pdf.drawString(280, y, str(sale["quantity"]))
+    pdf.drawString(360, y, f"INR {sale['price']:.2f}")
+    pdf.drawString(460, y, f"INR {sale['total']:.2f}")
+
+    y -= 30
+    pdf.line(50, y, width - 50, y)
+
+    y -= 25
+    pdf.setFont("Helvetica-Bold", 12)
+    pdf.drawString(360, y, "TOTAL:")
+    pdf.drawString(460, y, f"INR {sale['total']:.2f}")
+
+    y -= 25
+    pdf.setFont("Helvetica-Bold", 11)
+    pdf.drawString(50, y, f"Status: {status}")
+
+    y -= 60
+    pdf.setFont("Helvetica-Oblique", 9)
+    pdf.drawString(50, y, "Thank you for your business")
+
+    pdf.showPage()
+    pdf.save()
+    pdf_bytes = buffer.getvalue()
+
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="receipt-{sale_id}.pdf"'
+        }
+    )

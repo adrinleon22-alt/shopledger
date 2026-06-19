@@ -73,3 +73,12 @@
 **Reasoning:** The balance endpoint must show every sale belonging to the customer, including sales where no payment has been made yet — those are the pure udhaar cases that represent the largest portion of unpaid debt. An `INNER JOIN` would silently drop any sale with zero matching payment rows, making the outstanding balance incorrect. `LEFT JOIN` preserves all sales, and `COALESCE(SUM(payments.amount), 0)` handles the NULL that appears when a sale has no payments.
 
 **Tradeoff:** `LEFT JOIN` is slightly slower than `INNER JOIN` on large datasets because the database can't drop unmatched rows early. At this scale the difference is negligible; in production with millions of rows, this query would likely need an index on `payments.sale_id`.
+---
+
+## ADR-009: In-memory PDF generation with BytesIO
+
+**Decision:** The receipt endpoint generates PDFs into a `BytesIO` buffer in memory rather than writing them to disk and serving the file.
+
+**Reasoning:** ReportLab's API expects a file-like object to write into. `BytesIO` exposes the same interface as a real file (`.write()`, `.seek()`, `.tell()`) but lives in RAM — duck typing in action. Keeping the PDF in memory avoids two real problems with the disk approach: file pollution (every receipt request would leave a `.pdf` on disk that nobody cleans up) and concurrent-write conflicts (two simultaneous requests writing to the same filename would corrupt each other). Memory is also faster than disk I/O.
+
+**Tradeoff:** PDFs are not cached — every request regenerates from scratch. For receipts at this scale that's fine. If receipts were generated thousands of times for the same sale, a cache layer (Redis or disk-backed) would make sense.

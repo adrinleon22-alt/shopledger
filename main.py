@@ -6,6 +6,7 @@ from io import BytesIO
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
 from fastapi.responses import Response
+from openpyxl import Workbook
 
 app = FastAPI()
 
@@ -483,5 +484,74 @@ def get_sale_receipt(sale_id: int):
         media_type="application/pdf",
         headers={
             "Content-Disposition": f'attachment; filename="receipt-{sale_id}.pdf"'
+        }
+    )
+
+@app.get("/export/ledger")
+def export_ledger(month: str = Query(..., pattern=r"^\d{4}-\d{2}$")):
+    pattern = f"{month}%"
+
+    with sqlite3.connect(DATABASE) as conn:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(
+            """
+            SELECT 
+                created_at AS date,
+                'Sale' AS type,
+                item AS description,
+                total AS amount_in,
+                0 AS amount_out
+            FROM sales
+            WHERE created_at LIKE ?
+
+            UNION ALL
+
+            SELECT 
+                created_at AS date,
+                'Expense' AS type,
+                COALESCE(supplier, category) AS description,
+                0 AS amount_in,
+                amount AS amount_out
+            FROM expenses
+            WHERE created_at LIKE ?
+
+            ORDER BY date
+            """,
+            (pattern, pattern)
+        ).fetchall()
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = f"Ledger {month}"
+
+    headers = ["Date", "Type", "Description", "Amount In (INR)", "Amount Out (INR)"]
+    ws.append(headers)
+
+    total_in = 0
+    total_out = 0
+    for row in rows:
+        ws.append([
+            row["date"][:10],
+            row["type"],
+            row["description"],
+            row["amount_in"],
+            row["amount_out"],
+        ])
+        total_in += row["amount_in"]
+        total_out += row["amount_out"]
+
+    ws.append([])
+    ws.append(["", "", "TOTALS", total_in, total_out])
+    ws.append(["", "", "NET", total_in - total_out, ""])
+
+    buffer = BytesIO()
+    wb.save(buffer)
+    excel_bytes = buffer.getvalue()
+
+    return Response(
+        content=excel_bytes,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={
+            "Content-Disposition": f'attachment; filename="ledger-{month}.xlsx"'
         }
     )

@@ -82,3 +82,12 @@
 **Reasoning:** ReportLab's API expects a file-like object to write into. `BytesIO` exposes the same interface as a real file (`.write()`, `.seek()`, `.tell()`) but lives in RAM — duck typing in action. Keeping the PDF in memory avoids two real problems with the disk approach: file pollution (every receipt request would leave a `.pdf` on disk that nobody cleans up) and concurrent-write conflicts (two simultaneous requests writing to the same filename would corrupt each other). Memory is also faster than disk I/O.
 
 **Tradeoff:** PDFs are not cached — every request regenerates from scratch. For receipts at this scale that's fine. If receipts were generated thousands of times for the same sale, a cache layer (Redis or disk-backed) would make sense.
+---
+
+## ADR-010: UNION ALL over two queries with Python-side merging for the ledger export
+
+**Decision:** The ledger export endpoint combines sales and expenses with a single SQL `UNION ALL` query rather than running two separate queries and merging the results in Python.
+
+**Reasoning:** Sales and expenses share enough structural similarity (both are money events with a date, description, and amount) that aliasing them into a common five-column shape is cheap. Once aliased, SQLite combines and sorts the rows itself — in C, which is faster than Python sorting — and returns a single result set. The endpoint code then just iterates and writes rows, no manual merging or sorting logic needed.
+
+**Tradeoff:** `UNION ALL` requires both halves to have identical column shapes. We had to alias columns (`item AS description`, `category AS description`) and hardcode placeholder values (`0 AS amount_in` on expense rows, `0 AS amount_out` on sale rows). If the two tables had wildly different shapes — say expenses had 12 columns and sales had 3 — this aliasing would become unwieldy, and two natural queries with Python merging would be cleaner.

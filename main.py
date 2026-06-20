@@ -551,4 +551,19 @@ def export_ledger(month: str = Query(..., pattern=r"^\d{4}-\d{2}$")):
         }
     )
 
+@app.get("/udhaar/total")
+def get_total_udhaar():
+    with sqlite3.connect(DATABASE) as conn:
+        result = conn.execute(
+            """
+            SELECT COALESCE(SUM(sales.total), 0) - COALESCE(SUM(payments.amount), 0) AS total_udhaar
+            FROM sales
+            LEFT JOIN payments ON payments.sale_id = sales.id
+            WHERE sales.customer_id IS NOT NULL
+            """
+        ).fetchone()
+    
+    total = result[0] or 0
+    return {"total_udhaar": total}
+
 app.mount("/", StaticFiles(directory="static", html=True), name="static")

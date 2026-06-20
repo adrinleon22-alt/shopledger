@@ -7,18 +7,22 @@ async function loadDashboard() {
   document.getElementById("month-label").textContent = currentMonth;
 
   try {
-    const response = await fetch(`/summary?month=${currentMonth}`);
-    
-    if (!response.ok) {
-      throw new Error(`API returned ${response.status}`);
+    const [summaryResponse, udhaarResponse] = await Promise.all([
+      fetch(`/summary?month=${currentMonth}`),
+      fetch("/udhaar/total"),
+    ]);
+
+    if (!summaryResponse.ok || !udhaarResponse.ok) {
+      throw new Error("One or more API calls failed");
     }
 
-    const data = await response.json();
+    const summary = await summaryResponse.json();
+    const udhaar = await udhaarResponse.json();
 
-    document.getElementById("total-sales").textContent = `₹${data.total_sales}`;
-    document.getElementById("total-expenses").textContent = `₹${data.total_expenses}`;
-    document.getElementById("profit").textContent = `₹${data.profit}`;
-    document.getElementById("udhaar").textContent = "—";
+    document.getElementById("total-sales").textContent = `₹${summary.total_sales}`;
+    document.getElementById("total-expenses").textContent = `₹${summary.total_expenses}`;
+    document.getElementById("profit").textContent = `₹${summary.profit}`;
+    document.getElementById("udhaar").textContent = `₹${udhaar.total_udhaar}`;
   } catch (error) {
     console.error("Failed to load dashboard:", error);
   }

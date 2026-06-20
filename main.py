@@ -7,7 +7,7 @@ from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
 from fastapi.responses import Response
 from openpyxl import Workbook
-
+from fastapi.staticfiles import StaticFiles
 app = FastAPI()
 
 DATABASE = "shopledger.db"
@@ -82,11 +82,6 @@ class ExpenseCreate(BaseModel):
 class CustomerCreate(BaseModel):
     name: str = Field(min_length=1, max_length=100)
     phone: str | None = None
-
-
-@app.get("/")
-def root():
-    return {"message": "ShopLedger API"}
 
 
 @app.get("/sales")
@@ -555,3 +550,5 @@ def export_ledger(month: str = Query(..., pattern=r"^\d{4}-\d{2}$")):
             "Content-Disposition": f'attachment; filename="ledger-{month}.xlsx"'
         }
     )
+
+app.mount("/", StaticFiles(directory="static", html=True), name="static")

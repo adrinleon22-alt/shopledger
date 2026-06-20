@@ -35,6 +35,7 @@
 <section class="actions">
       <button id="open-sale-modal" class="primary-btn">+ Add Sale</button>
       <button id="open-expense-modal" class="primary-btn">+ Add Expense</button>
+      <button id="open-customers-modal" class="primary-btn">View Customers</button>
     </section>
 
     <div id="sale-modal" class="modal hidden">
@@ -95,6 +96,17 @@
         </form>
       </div>
     </div>
+    <div id="customers-modal" class="modal hidden">
+  <div class="modal-content customers-modal-content">
+    <header class="modal-header">
+      <h2>Customers</h2>
+      <button class="close-btn" data-modal="customers-modal">&times;</button>
+    </header>
+    <div id="customers-list">
+      Loading...
+    </div>
+  </div>
+</div>
 
   <script src="/app.js"></script>
 </body>

@@ -121,3 +121,46 @@ async function submitForm(formId, endpoint, modalId, errorPrefix) {
 
 submitForm("sale-form", "/sales", "sale-modal", "sale");
 submitForm("expense-form", "/expenses", "expense-modal", "expense");
+
+async function loadCustomers() {
+  const listEl = document.getElementById("customers-list");
+  listEl.textContent = "Loading...";
+
+  try {
+    const response = await fetch("/customers");
+    if (!response.ok) throw new Error("Failed to load customers");
+
+    const data = await response.json();
+    const customers = data.customers;
+
+    if (customers.length === 0) {
+      listEl.innerHTML = `<p class="empty-state">No customers yet.</p>`;
+      return;
+    }
+
+    const rows = customers.map(c => `
+      <div class="customer-row">
+        <div class="customer-info">
+          <p class="customer-name">${c.name}</p>
+          <p class="customer-phone">${c.phone || "No phone"}</p>
+        </div>
+        <div class="customer-balance">
+          <p class="balance-label">Outstanding</p>
+          <p class="balance-amount ${c.outstanding_balance > 0 ? 'has-debt' : ''}">
+            ₹${c.outstanding_balance}
+          </p>
+        </div>
+      </div>
+    `).join("");
+
+    listEl.innerHTML = rows;
+  } catch (error) {
+    console.error("Failed to load customers:", error);
+    listEl.innerHTML = `<p class="error">Failed to load customers.</p>`;
+  }
+}
+
+document.getElementById("open-customers-modal").addEventListener("click", () => {
+  openModal("customers-modal");
+  loadCustomers();
+});

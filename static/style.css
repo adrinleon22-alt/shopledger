@@ -176,3 +176,68 @@ form input:focus {
 .submit-btn:hover {
   opacity: 0.9;
 }
+.customers-modal-content {
+  max-width: 520px;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+#customers-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.customer-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem;
+  background: #f5f5f7;
+  border-radius: 10px;
+}
+
+.customer-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.customer-name {
+  font-weight: 500;
+  font-size: 1rem;
+  color: #1d1d1f;
+}
+
+.customer-phone {
+  font-size: 0.85rem;
+  color: #6e6e73;
+}
+
+.customer-balance {
+  text-align: right;
+}
+
+.balance-label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #6e6e73;
+  margin-bottom: 0.15rem;
+}
+
+.balance-amount {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #1d1d1f;
+}
+
+.balance-amount.has-debt {
+  color: #d70015;
+}
+
+.empty-state {
+  text-align: center;
+  color: #6e6e73;
+  padding: 2rem;
+}

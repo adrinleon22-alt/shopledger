@@ -261,7 +261,19 @@ def create_customer(customer: CustomerCreate):
 def get_customers():
     with sqlite3.connect(DATABASE) as conn:
         conn.row_factory = sqlite3.Row
-        customers = conn.execute("SELECT * FROM customers").fetchall()
+        customers = conn.execute(
+            """
+            SELECT 
+                customers.id,
+                customers.name,
+                customers.phone,
+                COALESCE(SUM(DISTINCT sales.total), 0) - COALESCE(SUM(payments.amount), 0) AS outstanding_balance
+            FROM customers
+            LEFT JOIN sales ON sales.customer_id = customers.id
+            LEFT JOIN payments ON payments.sale_id = sales.id
+            GROUP BY customers.id
+            """
+        ).fetchall()
     return {"customers": [dict(customer) for customer in customers]}
 
 class PaymentCreate(BaseModel):

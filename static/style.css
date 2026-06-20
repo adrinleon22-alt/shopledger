@@ -60,3 +60,119 @@ main {
   font-weight: 600;
   color: #1d1d1f;
 }
+
+.hidden {
+  display: none !important;
+}
+
+.actions {
+  margin-top: 2rem;
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.primary-btn {
+  background: #1d1d1f;
+  color: white;
+  border: none;
+  border-radius: 10px;
+  padding: 0.85rem 1.5rem;
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.primary-btn:hover {
+  opacity: 0.85;
+}
+
+.modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  z-index: 100;
+}
+
+.modal-content {
+  background: white;
+  border-radius: 14px;
+  padding: 1.75rem;
+  width: 100%;
+  max-width: 420px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.25rem;
+}
+
+.modal-header h2 {
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  color: #6e6e73;
+  cursor: pointer;
+  line-height: 1;
+}
+
+form label {
+  display: block;
+  margin-bottom: 1rem;
+  font-size: 0.9rem;
+  color: #1d1d1f;
+}
+
+form input {
+  display: block;
+  width: 100%;
+  margin-top: 0.35rem;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid #d2d2d7;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-family: inherit;
+}
+
+form input:focus {
+  outline: none;
+  border-color: #1d1d1f;
+}
+
+.error {
+  display: block;
+  color: #d70015;
+  font-size: 0.8rem;
+  margin-top: 0.25rem;
+  min-height: 1em;
+}
+
+.submit-btn {
+  background: #1d1d1f;
+  color: white;
+  border: none;
+  border-radius: 10px;
+  padding: 0.85rem;
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  width: 100%;
+  margin-top: 0.5rem;
+}
+
+.submit-btn:hover {
+  opacity: 0.9;
+}

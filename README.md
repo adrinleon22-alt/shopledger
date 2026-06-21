@@ -1,5 +1,7 @@
 # ShopLedger
 
+**Live demo:** https://shopledger-hx96.onrender.com/
+
 A bookkeeping API for a small hardware shop in India. Built to replace a paper-based ledger with digital sales, expenses, customer credit tracking, and monthly profit calculation.
 
 ## Why this exists
